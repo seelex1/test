@@ -1,0 +1,388 @@
+---
+title: "Compte Rendu du Projet Statistique"
+author: "Tess AZEVEDO - Lucas BOUILLON - Xiaoya WANG"
+output:
+  pdf_document: default
+  word_document: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Cher Monsieur XX, suite à votre demande concernant l'analyse descriptive du jeu de donnée de la plateforme Spotify, nous vous présentons notre étude sous 3 parties. Dans un premier temps, nous allons définir la nature de chaque variable. Dans un second temps, nous nous interesserons à l'analyse uni-dimensionnelle et bi-dimensionnelle du jeu de données. Enfin, nous finirons par une analyse en composantes principales (ACP).
+
+# 1. Nature des variables
+
+Dans un premier temps, nous allons définir la nature de chaque variable:
+
+- Quantitatives continues: acousticness, duration, energy, liveness, loudness, tempo
+- Quantitaive discrète : year
+- Qualitatives nominales: explicit, mode
+- Qualitatives ordinales: key, pop.class
+
+# 2. Analyses uni- et bi-dimensionnelles du jeu de données
+
+Dans cette partie, nous allons nous interesser à l'analyse descriptive de notre jeu de données, composé de 10 000 musiques, avec 11 attributs. Nous allons dans un premier temps analyser certains de ces attributs indépendamment des autres, avant de realiser une analyse bidimensionnelle d'autres de ces attributs. Ces analyses nous permettrons de tirer des conclusions concernant notre jeu de données, afin de reperer certaines anomalies ou remarquer des corrélations interessantes entre certaines variables.
+
+## 2.1 Analyse unidimensionnelle
+
+```{r}
+tab<-read.table("spotify-3MIC.txt",header=TRUE)
+head(tab)
+attributes(tab)$names
+dim(tab)
+```
+
+On a bien un tableau de 10 000 musiques avec 11 attributs.
+
+### 2.1.1 Les variables quantitatives
+
+Nous allons premièrement analyser certaines de ces variables quantitatives, qui nous semblent interessantes. Pour rappel, elles correspondent aux variables suivantes : acousticness / duration / energy / liveness / loudness / tempo. Nous commenceront par la durée des musiques.
+```{r out.width ="300px",dpi = 120, fig.align='center'}
+dura<-c(tab$duration)
+H<-hist(dura)
+summary(dura)
+```
+On observe une anomalie dans la durée des musiques, il y a dans le tableau une musique de 38min, et des musiques plus longues que 10min. Ces musiques "anormales" permettent d'expliquer entre autre l'écart de 23sec qu'il y a entre la durée moyenne des musiques du tableau, et la médiane.
+À cause de ces rares musiques, l'histogramme ci-dessus n'est pas une représentation idéale pour bien comprendre la répartion de la durée des musiques du tableau. Avec cette rprésentation, on sait juste que environ 50% des musiques du tableau durent entre 3min20 et 6min40, tandis qu'environ 45% durent moins de 3min20. Cette information est trop peu précise au vu de la durée moyenne d'une musique.
+```{r out.width ="300px",dpi = 120,fig.align='center'}
+boxplot(dura,horizontal = TRUE, main = 'Boxplot of Duration')
+```
+
+Cette représentation nous montre bien le nombre important d'outliers présents dans le jeu de données. On comprend grâce à cette représentation mieux pourquoi il existe une telle différence entre la médiane et la moyenne concernant la durée des musiques, mais on comprend aussi mieux leur répartition.
+
+```{r out.width ="250px",dpi = 120,fig.align='center'}
+#tab$year=factor(tab$year)
+year<-tab[,1]
+barplot(table(year))
+```
+
+On peut directement remarquer que l'année de parution des musiques présentes dans notre tableau est plutôt bien répartie, surtout pour les musiques sorties après 1945. Nous disposons cependant de moins de musiques plus "anciennes".
+
+On décide à présent d'étudier la variable *tempo*. 
+```{r out.width ="350px",dpi = 120, fig.align='center'}
+temp<-c(tab$tempo)
+par(mfrow=c(1,2))
+TT<-hist(temp, breaks = 20) 
+boxplot(temp,horizontal = TRUE, main = 'Boxplot of tempo')
+summary(temp)
+```
+On peut remarquer grâce à ces deux graphes que la variable est symétrique. Elle semble même assez symétrique pour être approchée par une loi normale, au vu de sa répartition. 
+
+### 2.1.2 Les variables qualitatives
+
+```{r out.width ="300px",dpi = 120,fig.align='center'}
+##Il est important de coder nos variables qualitatives en *factor*
+tab$pop.class=factor(tab$pop.class) 
+pop.class<-tab[,11]
+par(mfrow=c(1,2))
+barplot(table(pop.class), main = 'Barplot of popularity')
+pie(table(pop.class), main = 'Pie chart of popularity')
+```
+
+On s'interresse ici à la popularité des musiques présentes dans le tableau. Le nombre de musiques de classes B,C,D se vaut presque, tandis qu'on remarque une certaines rareté pour ce qui est des musiques de classe A, à savoir les plus populaires. Il est cependant impossible de savoir si ce nombre plus faible de musiques très populaires est dû à l'échantillon en lui même, c'est à dire si notre jeu de données est principalement composé de musiques moyennement populaires, ou si le critère d'une haute popularité selon Spotify est très élevé.
+
+On peut aussi s'intéresser à la proportion de musique *explicit*, c'est à dire comportants des vulgarités.
+```{r out.width ="300px",dpi = 120,fig.align='center'}
+tab$explicit=factor(tab$explicit,labels=c("Non vulgaire","Vulgaire")) 
+par(mfrow=c(1,2))
+explicit<-tab[,5]
+barplot(table(explicit), main = 'Barplot of explicit')
+pie(table(explicit), main = 'Pie chart of explicit')
+```
+
+On constate un nombre plus important de musiques sans vulgarité. Plus précisement, on peut s'intéresser à cette proportion exacte :
+```{r}
+data.frame(Effectif = c(table(explicit)), Frequence = c(table(explicit))/sum(table(explicit)))
+```
+Près de 70% des musiques de l'échantillons ne sont pas considérées comme vulgaires. Encore une fois, cette information est intéressante, mais elle ne permet pas de conclure quand à la réelle proportion de musiques vulgaires ou non sur la plateforme. On ne considère ici qu'un échantillon. C'est pourquoi, pour une analyse plus approfondie, on va étudier les liens entre ces différentes variables grâce à une analyse bidimensionnelle.  
+
+## 2.2 Analyse bidimensionnelle
+
+Dans cette partie nous allons nous intéresser à l'analyse bidimensionnelle. Elle consiste à mener l'étude de deux variables observées sur un meme échantillon. Nous espérons ainsi mettre en évidenced'éventuelles liasons entre deux variables.
+
+### 2.2.1  Entre variables qualitatives
+Nous allons mener l'étude des variables qualitatives key,mode,explicit et pop.class.
+
+```{r out.width ="300px",dpi = 120}
+#Les variables qualitatives doivent etre codées en factor, nous allons les convertir
+tab$pop.class=factor(tab$pop.class)
+tab$key=factor(tab$key)
+tab$mode=factor(tab$mode,labels=c("Mineur","Majeur"))
+tab$explicit=factor(tab$explicit,labels=c("Pas de vulgarités","Vulgarités"))
+```
+
+Commençons par croiser les variables key et mode:
+```{r out.width ="300px",dpi = 120} 
+#On choisit dans la table les indices qui correspondent à key et mode
+key<-tab[,6]
+mode<-tab[,9]  
+#Table de contingence 
+tab2<-table(mode,key)
+#Diagramme en mosaique 
+mosaicplot(tab2,main="Diagramme en mosaique des variables mode et key")
+```
+
+Ici nous étudions les variables key et mode, nous pouvons voir que les lignes du mosaic plot sont pratiquement alignés.Les profils-ligne sont donc quasiment égaux, il n'y a pas de variation conjointe des deux variables.
+
+
+Entre les variables nominales mode et explicit:
+
+```{r out.width ="300px",dpi = 120}
+#Table de contingence
+tab3<-table(tab$explicit,tab$mode)
+#Diagramme en mosaique
+mosaicplot(tab3,main="Diagramme en mosaique des variables mode et explicit")
+```
+
+Suite à  des nombreux essais avec toutes les variables, les deux seules variables qualitatitives trés liées sont la mode et explicit.
+Par lecture graphique, nous pouvons voir que si un morceau contient des vulgarités, il possede aussi une tonalité majeure. Or à priori, ces deux éléments ne devraient pas etre liés, dans une musique le caractere vulgaire n'implique pas un mode majeur.
+On peut se demander si les données de ce jeu sont bien exactes/cohérentes.
+
+### 2.2.2 Entre variables quantitatives 
+Pour mener cette étude à bien, nous allons répresenter le graphique de corrélation qui nous permetra d'identifier les liaisons entre les différentes variables quantitatives.
+
+```{r out.width ="250px",dpi = 120}
+#On selectionne les variables quantitatives dans le tableau
+spot<-tab[,c(1,2,3,4,7,8,10)]
+library(corrplot)
+corrplot(corr=cor(spot),method="ellipse")#Graphique des corrélations 
+cor(spot)#Répresente la matrice des corrélations  
+```
+
+Sur ce graphique de corrélations,on peut tout d'abord constater qu'on a un groupe de 4 variables correlées entre  elles: year, acousticness, energy et loudness.
+
+On peut voir que loudness et energy sont fortement correlées car le disque les reliant est fin et bleu foncé(corrélation proche de 1).
+Le résultat est confirmé par la matrice de corrélation(donnée par cor(spot)), cette dérniere a une valeur de 0.77448763. 
+Ces résultats semblent cohérents avec des phénomenes du quotidien, on sait que physiquement afin de produire un son plus fort il faut plus d'énergie pour y arriver.
+
+Par ailleurs,nous voyons également que le disque  entre energy et acousticness, est fin et rouge foncé, leur corrélation est proche de -1,de -0.75525841 plus précisement d'après la matrice.
+Un morceau acoustique ne comporte pas d'instruments électroniques, ce qui réduit les couts énergétiques en électricité par exemple.
+Le meme effet est observé entre loudness et acousticness, les instruments électroniques sont connus pour etre plus bruyants.De plus ça semble cohérent étant donné que loudness et energy ont une corrélation proche de 1.
+
+Pour conclure avec ce groupe de 4 variables, les musiques plus récentes ont tendance à etre plus energiques, de volume plus elevé et moins acoustiques.
+
+Par ailleurs, duration et liveness ne sont pas correlées aux autres variables surement parce que peut importe si la musique est longue ou si elle est faite en direct, les autres variables ne sont pas influencées par cela.Elle peut etre récente ou plus ancienne, acoustique ou non, de volume fort ou faible.. 
+
+
+```{r out.width ="350px",dpi = 120}
+acousticness=tab$acousticness
+energy=tab$energy
+#Nuage de points
+plot(acousticness,energy,main="Nuage de points")
+#Droite de régression linéaire
+abline(lm(energy~acousticness),col="red")
+```
+
+Nous avons décidé de tracer energy en fonction de acousticness et la droite de régression linéaire. Nous voyons clairement que les points évoluent en simultané autour de cette droite.
+On a une droite décroissante, plus l'énergie augmente et moins un morceau est acoustique.
+Cette répresentation confirme les résultas obtenus avec la matrice de corrélation. La valeur est d'environ -0.755.
+
+### 2.2.3 Entre variables qualitatives et quantitatives
+
+Nous choisissons pour cette partie de répresenter les variables à l'aide des diagrammes en boites parallèles,plus celles-ci ont des positions differéntes, plus les deux variables sont liées. Nous répresenterons donc uniquement  les variables que nous pensons avoir une variation conjointe, notamment avec la variable qualitative de la classe de popularité. 
+
+
+
+```{r out.width ="300px",dpi = 120, fig.show="hold"}
+#On renomme les variables pour plus de clarté
+loudness=tab$loudness
+pop.class=tab$pop.class
+year=tab$year
+acousticness=tab$acousticness
+energy=tab$energy
+
+#On trace les diagrammes en boites parallèles
+par(mfrow=c(1,2))
+boxplot(loudness~pop.class,main="Diagramme en boites parallèles
+des variables loudness et popclass",ylab="loudness",xlab="pop.class",cex.main= .6)
+
+boxplot(acousticness~pop.class,main="Diagramme en boites parallèles des variables loudness 
+        et popclass",ylab="acousticness",xlab="pop.class",cex.main= .6)
+
+boxplot(year~pop.class,main="Diagramme en boites parallèles des variables 
+        year et popclass",ylab="year",xlab="pop.class", cex.main= .6)
+
+```
+
+Sur le premier graphique nous pouvons constater que plus un morceau est bruyant(volume elevé),plus il est populaire. 
+Nous observons l'effet inverse entre acousticness et la classe de popularité.
+Les morceaux d'acoustique proche de 1 appartiennent à la majorité à la classe D. 
+Enfin, nous remarquons que les morceaux plus populaires (de classe "A") sont plus récents, plus de 75% ont eté faites entre 2000 et 2020.
+Tout ceci est surement lié aux phénomenes de mode, actuellement les personnes écoutent sur les plateformes de streaming des musiques plutot modernes, moins acoustiques.
+
+# 3. Analyse en composantes principales (ACP)
+
+Dans cette partie, nous allons faire une analyse en composantes principales (ACP), **le principe de l’ACP** consiste à synthétiser les informations d’une base de données en construisant des *composantes principales* issues des variables initiales, en perdant le moins d'informations possible.
+
+Nous allons mener une **ACP centrée réduite** sur les variables quantitatives. On réduit les données car elles n’ont pas les mêmes unités et ne sont pas du tout à la même échelle, donc il faut les normaliser.
+
+Nous utiliserons dans le cadre de projet **la matrice de travail: matrice_trav** qui va être définie par la suite.
+
+Tout d'abord, on transforme les deux variables qualitatives "explicit" et "mode" sous forme de facteurs, et puis stocke les variables quantitatives dans une matrice X:
+
+```{r }
+X=tab[,c(1,2,3,4,7,8,10)]#on selecte les 7 variables quantitatives
+```
+
+Nous pouvons obtenir la matrice de travail matrice_trav des données centrées et réduites à l’aide de la commande scale:
+
+```{r}
+matrice_trav=scale(X,center=T,scale=T)#matrice de travail
+```
+
+## 3.1 Mise en place de l'ACP:
+
+Nous allons ensuite faire l'ACP centrée et réduite avec la librairie FactoMineR, en précisant que les variables "explict" et "mode" sont des variables qualitatives supplémentaires avec l'option quali.sup:
+
+```{r, include=FALSE}
+library(FactoMineR)
+library(corrplot)
+library(ggplot2)
+library(factoextra)
+```
+
+```{r}
+res.acp <- PCA(tab[,c(1,2,3,4,5,7,8,9,10)],scale.unit=TRUE,ncp=7,quali.sup=c(5,8),graph=FALSE)
+```
+
+Affichons les pourcentages des chaque composante:
+
+```{r out.width ="400px",dpi = 120}
+res.acp$eig[,"cumulative percentage of variance"]#les valeurs des pourcentages cumulés
+fviz_eig(res.acp, addlabels = TRUE, ylim = c(0, 50), 
+         main="Graphe des pourcentages d'inertie cumulés")#on affiche le graphe pour visualiser
+```
+
+D'après le résultat obtenu, on peut voir que le pourcentage cumulé dépasse 80% à partir de la 4e composante principale(84.9%), les autres données sont peu informatives et peuvent donc être abandonnées, donc **on garde 4 composantes principales**.
+
+## 3.2 Étude des variables
+
+Dans cette partie, nous allons porter une analyse sur les variables en traçant les graphes des variables.
+
+Représentons d'abord les corrélations entre les variables initiales et les composantes principales. Nous affichons les graphes des variables de Dim1 et Dim2, ensuite de Dim3 et Dim4, en coloriant selon leur qualité de représentation, grâce à l'option cos2 pour mieux visualiser:
+
+```{r out.width ="250px",dpi = 120, fig.show='hold'}
+fviz_pca_var(res.acp, col.var="cos2", repel=TRUE, gradient.cols=c("#00AFBB", "#E7B800","#FC4E07"))
+fviz_pca_var(res.acp, col.var="cos2", repel=TRUE, gradient.cols=c("#00AFBB","#E7B800","#FC4E07"),
+             axes = c(3,4))#cercle des corrélations
+```
+
+Dans les graphes des variables, on en déduit les qualités de représentation de chaque variable.
+
+Les graphiques confirment tout d’abord:
+
+- les variables "energy", "year" et "loudness" sont corrélées positivement. La flèche de la variable "acousticness" est quant à elle dans la direction opposée, donc elle est corrélée négativement avec les 3 autres variables. On peut donc dire que les musiques récentes qui possèdent une grande énergie sont souvent bruyantes et ne sont pas acoustiques.
+
+- les variables "duration" et "loudness" sont corrélées positivement tant que "tempo" est corrélée négativement avec elles. On peut dire qu'en général, les musiques en live avec une longue duration n'ont pas un tempo élevé.
+
+- les variables "year", "energy", "loudness", "acousticness" et "tempo" sont bien réprésentées dans la première dimension.
+
+- la variable "duration" est bien représentée dans la deuxième dimension.
+
+- la variable "tempo" est bien représentée dans la troisième dimension.
+
+- la variable "liveness" est bien représentée dans la quatrième dimension.
+
+On peut ensuite dire que:
+
+- le premier axe(Dim 1) représente les chansons récentes, bruyantes et à forte énergie, en réalité, il peut contenir du rock, du métal, de l'électro etc.
+
+- le deuxième axe(Dim 2) représente les morceaux qui durent longtemps, par exemple la musique classique.
+
+- le troisième axe (Dim 3) prend surtout en compte les musiques réalisées en direct(“live”).
+
+- pour le quatrième axe(Dim 4), c’est le tempo des morceaux qui est représenté, les musiques à tempo élevé ont une fréquence de la pulsation élevée, souvent font référence aux types de musiques qu’on écoute lorsqu'on fait du sport, adapté au rythme de la course par exemple.  
+
+On représente ici les corrélations entre les variables qualitatives et les 4 premières composantes principales:
+
+```{r out.width ="200px",dpi = 120, fig.show='hold'}
+var = get_pca_var(res.acp)
+corrplot(var$cos2[,1:4], is.corr=FALSE)#graphe des qualités de représentation
+corrplot(var$contrib[,1:4], is.corr=FALSE) #graphe des contributions
+```
+
+Dans le graphe à gauche, on représente ces variables quantitatives selon leur qualité de représentation, plus le cercle de corrélations est grand et foncé, plus cette variable est bien présentée dans cette dimension. 
+
+On en déduit que les variables "year", "energy", "loudness", "acousticness" et "tempo" sont bien représentées dans la Dim1, tant que les Dim2, Dim3 et Dim4 n'apportent qu'une seule variable représentative, respectivement "duration", "liveness" et "tempo".
+
+Dans le graphe à droite, on représente les contributions de chaque variable aux dimensions. Plus le cercle est grand et foncé, plus cette variable a une grande contribution dans cette dimension. 
+
+On voit que les variables "year", "energy", "loudness", "acousticness" et "tempo", qui étaient toutes bien représentées par la Dim1 contribuent également à cette dimension, tandis que les variables "duration", "liveness" et "tempo" contribuent énormément à leurs axes respectifs car elles sont les seules à être bien représentées par ces derniers.
+
+## 3.3 Étude des individus
+
+Dans cette partie, nous allons porter une analyse sur les individus en traçant les graphes des individus.
+
+Nous allons représenter les projections des différents individus sur le premier plan factoriel, qui est engendré par les deux premiers axes principaux Dim1 et Dim2. Ensuite, nous affichons seulement les 10 points ayant la plus grande contribution. Idem pour les axes principaux Dim3 et Dim4.
+
+```{r out.width ="260px",dpi = 120, fig.show='hold'}
+fviz_pca_ind(res.acp, col.ind = "cos2", repel = TRUE, geom.ind="point", 
+             gradient.cols = c("#00AFBB", "#E7B800","#FC4E07"))#graphe des individus
+
+fviz_pca_ind(res.acp, col.ind = "cos2", repel = TRUE, geom.ind="point", 
+             gradient.cols = c("#00AFBB", "#E7B800","#FC4E07"), select.ind = list(contrib=10))
+             #on affiche seulement les 10 points ayant la plus grande contribution
+```
+
+```{r out.width ="260px",dpi = 120, fig.show='hold'}
+#Pour Dim3 et Dim4:
+fviz_pca_ind(res.acp, col.ind = "cos2", repel = TRUE, geom.ind="point", 
+             gradient.cols = c("#00AFBB", "#E7B800","#FC4E07"), axes = c(3,4))
+
+fviz_pca_ind(res.acp, col.ind = "cos2", repel = TRUE, geom.ind="point", 
+             gradient.cols = c("#00AFBB", "#E7B800","#FC4E07"), 
+             select.ind = list(contrib=10), axes = c(3,4))
+```
+
+D'après les deux premiers graphes, les individus qui ont une grande qualité de représentation sont en rouge, regroupés autour du premier axe. On peut aussi voir que les individus ayant la plus grande contribution dans la construction des deux premiers axes principaux sont dans l'axe positive de Dim2 et l'axe négative de Dim1, qui représentent les musiques longues, anciennes, calmes et à faible énergie, par exemple la musique classique.
+
+Quant aux deux derniers graphes, représentants la Dim3 et Dim4, les individus qui ont une grande qualité de représentation se répartissent plus dans la Dim3. Les individus ayant la plus grande contribution sont dans l'axe positif de Dim4 et l'axe négatif de Dim3, qui représentent les musiques sans vivacité et à tempo élevé.
+
+Ensuite, on colorie les variables qualitatives "key", "explicit" et "pop.class" en affichant leurs ellipses de concentration avec l'option addEllipses. La variable "mode" n'est pas dans la liste car elle porte la même caractéristique que la variable "explicit".
+
+```{r out.width ="260px",dpi = 120, fig.show='hold'}
+#On affiche leur ellipses de concentration
+fviz_pca_ind(res.acp, col.ind = tab$key, addEllipses = TRUE, 
+             legend.title = "key", geom.ind = "")
+fviz_pca_ind(res.acp, col.ind = tab$explicit, addEllipses = TRUE, 
+             legend.title = "explicit", geom.ind = "point")
+fviz_pca_ind(res.acp, col.ind = tab$pop.class, addEllipses = TRUE, 
+             legend.title = "pop.class", geom.ind = "point")
+```
+
+On remarque que quelque soit sa tonalité, les individus sont bien répartis dans les deux premiers axes principaux. On en déduit que la variable "key" n'est pas corrélée avec les variables "year", "acousticness", "energy", "loudness", "tempo" et "duration". Ceci est cohérant avec l'analyse bi-dimensionnelle de la première partie.
+
+Selon le deuxième graphe, qu'ils soient explicites ou non, les répartitions des individus sont homogènes autours des deux premiers axes principaux. Il semblerait qu’il n’y ait pas une tendance prononcée des individus selon une des dimensions.
+
+Sur le troisième graphe, on peut voir clairement que les individus se groupent selon leur classe de popularité. Les musiques les plus populaires sont réparties dans la Dim1, ça veut dire qu’elles sont des chansons récentes, bruyantes et à forte énergie, par exemple le rock. Les musiques les moins populaires sont réparties négativement dans la Dim1 et positivement dans la Dim2, ça veut dire que ce sont des chansons longues, anciennes, calmes et à faible énergie, par exemple la musique classique.
+
+On continue la même étude cette fois-ci avec les axes principaux 3 et 4:
+
+```{r out.width ="260px",dpi = 120, fig.show='hold'}
+#Pour Dim3 et Dim4:
+fviz_pca_ind(res.acp, col.ind = tab$key, addEllipses = TRUE, 
+             legend.title = "key", geom.ind = "", axes = c(3,4))
+fviz_pca_ind(res.acp, col.ind = tab$explicit, addEllipses = TRUE, 
+             legend.title = "explicit", geom.ind = "point", axes = c(3,4))
+fviz_pca_ind(res.acp, col.ind = tab$pop.class, addEllipses = TRUE, 
+             legend.title = "pop.class", geom.ind = "point", axes = c(3,4))
+```
+
+On peut voir que les variables "key" et "explicit" ne sont pas corrélées avec "liveness" et "tempo". De plus, on remarque qu'il y a une liaison entre la popularité de la musique et sa valeur de "liveness". Les musiques les moins populaires sont plus réparties dans la Dim3, autrement dit, ceux qui possèdent une valeur de "liveness" plus haute sont moins populaires.
+
+# Conclusion
+
+Nous avons mené une analyse descriptive, qui nous l'espérons répond à vos attentes. Suite à toutes ces études, nous pouvons dire que malgré un jeu de données, en apparence lambda, nous avons pu en tirer des conclusions intéressantes. 
+Tout d'abord, lors de l'analyse unidimensionnelle nous avons identifié les caracteristiques majeures des morceaux en étudiant les variables individuellement.
+
+Ensuite, avec l'analyse bidimensionnelle nous avons pu mettre en lumière les liens entre les differentes variables, ainsi que des anomalies. Nottament, le fait que les vulgarités d'un morceau aient un impact sur le mode, et vice-versa.
+
+Enfin, grace à l'analyse en composantes (ACP) nous avons pu établir que certaines variables sont liées peuvent etre regroupées: l'année, l'acoustique, l'énergie et le volume(loudness). L'énergie et le volume sont fortement correlés, et plus les années passent, plus ces variables deviennent importantes. Le phénomène inverse est constaté pour acousticness, ces musiques deviennent plus rares avec le temps et elles font partie des moins populaires.
+Les trois variables tempo, durée et le fait que la musique soit interpretée en direct sont très indépendantes des autres attributs du jeu de données et doivent être prises en compte indépendemment.
+
+De plus, nous vous conseillons de garder seulement les quatre composantes principales décrites dans la partie précédente. Elles caracterisent bien l'ensemble des variables quantitatives. Cela  vous permettra d'avoir une vision globale et répresentative du jeu de données.
+
+Pour conclure notre étude, nous nous accordons à dire que les morceaux les plus populaires de la plateforme spotify sont récents, ont un niveau d'énergie et volume élevés. 
+
+
